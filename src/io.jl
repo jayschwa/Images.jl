@@ -60,7 +60,7 @@ function imread(filename::String)
     # Use the extension as a hint to determine file type
     if has(fileext, ext)
         candidates = fileext[ext]
-        index = image_decode_magic(stream, magicbuf, candidates)
+        index = image_decode_magic(stream, magicbuf, candidates, true)
         if index > 0
             # Position to end of this type's magic bytes
             seek(stream, length(filemagic[index]))
@@ -71,7 +71,7 @@ function imread(filename::String)
         end
     end
     # Extension wasn't helpful, look at all known magic bytes
-    index = image_decode_magic(stream, magicbuf, 1:length(filemagic))
+    index = image_decode_magic(stream, magicbuf, 1:length(filemagic), false)
     if index > 0
         seek(stream, length(filemagic[index]))
         if !filesrcloaded[index]
@@ -89,7 +89,7 @@ function imread(filename::String)
 end
 
 # Identify via magic bytes
-function image_decode_magic{S<:IO}(stream::S, magicbuf::Vector{Uint8}, candidates::AbstractVector{Int})
+function image_decode_magic{S<:IO}(stream::S, magicbuf::Vector{Uint8}, candidates::AbstractVector{Int}, match_empty::Bool)
     maxlen = 0
     for i in candidates
         len = length(filemagic[i])
@@ -99,9 +99,11 @@ function image_decode_magic{S<:IO}(stream::S, magicbuf::Vector{Uint8}, candidate
         push!(magicbuf, read(stream, Uint8))
     end
     for i in candidates
-        ret = ccall(:memcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Int), magicbuf, filemagic[i], min(length(filemagic[i]), length(magicbuf)))
-        if ret == 0
-            return i
+        if length(filemagic[i]) > 0 || match_empty
+            ret = ccall(:memcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Int), magicbuf, filemagic[i], min(length(filemagic[i]), length(magicbuf)))
+            if ret == 0
+                return i
+            end
         end
     end
     return -1
@@ -763,3 +765,6 @@ add_image_file_format(".dummy", b"Dummy Image", Dummy, "dummy.jl")
 
 type AndorSIF <: Images.ImageFileType end
 add_image_file_format(".sif", b"Andor Technology Multi-Channel File", AndorSIF, "readSIF.jl")
+
+type QuakeWAL <: Images.ImageFileType end
+add_image_file_format(".wal", b"", QuakeWAL, "readWAL.jl")
